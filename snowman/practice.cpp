@@ -10,6 +10,55 @@ float x = 0.0f, z = 5.0f;
 float lx = 0.0f, lz = -1.0f;
 float angle = 0.0f;
 
+int xOrigin = -1;
+
+float deltaAngle = 0.0f;
+float deltaMove = 0;
+
+#define RED 1
+#define GREEN 2
+#define BLUE 3
+#define ORANGE 4
+
+#define FILL 1
+#define LINE 2
+
+#define SHRINK 1
+#define NORMAL 2
+
+int fillMenu, shrinkMenu, mainMenu, colorMenu;
+
+float red = 1.0f, blue = 0.5f, green = 0.5f;
+
+float scale = 1.0f;
+
+int menuFlag = 0;
+
+int frame = 0;
+int time = 0, timebase = 0;
+char s[50];
+
+void mouseButton(int button, int state, int x, int y) {
+	if (button == GLUT_LEFT_BUTTON) {
+		if (state == GLUT_UP) {
+			angle += deltaAngle;
+			xOrigin = -1;
+		}
+		else if (state == GLUT_DOWN) {
+			xOrigin = x;
+		}
+	}
+}
+
+void mouseMove(int x, int y) {
+	if (xOrigin >= 0) {
+		deltaAngle = (x - xOrigin) * 0.001f;
+
+		lx = sin(angle + deltaAngle);
+		lz = -cos(angle + deltaAngle);
+	}
+}
+
 void drawSnowman() {
 	glColor3f(1.0f, 1.0f, 1.0f);
 
@@ -37,7 +86,16 @@ void drawSnowman() {
 	glutSolidCone(0.05f, 0.05f, 10, 2);
 }
 
-void display() {
+void computePos(float deltaMove) {
+	x += deltaMove * lx * 0.1f;
+	z += deltaMove * lz * 0.1f;
+}
+
+void renderScene() {
+	if (deltaMove) {
+		computePos(deltaMove);
+	}
+
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glLoadIdentity();
@@ -64,10 +122,19 @@ void display() {
 		}
 	}
 
+	/*frame++;
+	time = glutGet(GLUT_ELAPSED_TIME);
+	if (time - timebase > 1000) {
+		sprintf(s, "Lighthouse3D - FPS:%4.2f",
+			frame * 1000.0 / (time - timebase));
+		timebase = time;
+		frame = 0;
+	}*/
+
 	glutSwapBuffers();
 }
 
-void resize(int w, int h) {
+void changeSize(int w, int h) {
 	if (h == 0) {
 		h = 1;
 	}
@@ -83,35 +150,135 @@ void resize(int w, int h) {
 	glMatrixMode(GL_MODELVIEW);
 }
 
-void keyBoardListener(unsigned char key, int x, int y) {
+void processNormalKeys(unsigned char key, int x, int y) {
+	glutSetMenu(mainMenu);
+
+	switch (key) {
+		case 27: 
+			glutDestroyMenu(mainMenu);
+			glutDestroyMenu(fillMenu);
+			glutDestroyMenu(colorMenu);
+			glutDestroyMenu(shrinkMenu);
+			exit(0);
+			break;
+		case 's':
+			if (!menuFlag) {
+				glutChangeToSubMenu(2, "shrink", shrinkMenu);
+			}
+			break;
+		case 'c':
+			if (!menuFlag) {
+				glutChangeToSubMenu(2, "Color", colorMenu);
+			}
+			break;
+	}
+
 	if (key == 27) {
 		exit(0);
 	}
 }
 
-void specialKeyBoardListener(int key, int x, int y) {
-	float fraction = 0.1f;
+void pressKey(int key, int x, int y) {
 	switch (key) {
 		case GLUT_KEY_UP:
-			x += lx * fraction;
-			z += lz * fraction;
+			deltaMove = 0.1f;
 			break;
 		case GLUT_KEY_DOWN:
-			x -= lx * fraction;
-			z -= lz * fraction;
+			deltaMove = -0.1f;
 			break;
 		case GLUT_KEY_LEFT:
-			angle += 0.1f;
-			lx = sin(angle);
-			lz = -cos(angle);
+			deltaAngle = -0.01f;
 			break;
 		case GLUT_KEY_RIGHT:
-			angle -= 0.1f;
-			lx = sin(angle);
-			lz = -cos(angle);
+			deltaAngle = 0.01f;
 			break;
 	}
 }
+
+void releaseKey(int key, int x, int y) {
+	switch (key) {
+		case GLUT_KEY_LEFT:
+		case GLUT_KEY_RIGHT: deltaAngle = 0.0f; break;
+		case GLUT_KEY_UP: 
+		case GLUT_KEY_DOWN: deltaMove = 0; break;
+	}
+}
+
+void processMenuStatus(int status, int x, int y) {
+	if (status == GLUT_MENU_IN_USE) {
+		menuFlag = 1;
+	}
+	else {
+		menuFlag = 0;
+	}
+}
+
+void processMainMenu(int option) {
+
+}
+
+void processFillMenu(int option) {
+	switch (option) {
+	case FILL: glPolygonMode(GL_FRONT, GL_FILL);
+	case LINE: glPolygonMode(GL_FRONT, GL_LINE);
+	}
+}
+
+void processShrinkMenu(int option) {
+	switch (option) {
+	case SHRINK: scale = 0.5f; break;
+	case NORMAL: scale = 1.0f; break;
+	}
+}
+
+void processColorMenu(int option) {
+	switch (option) {
+		case RED:
+			red = 1.0f;
+			green = 0.0f;
+			blue = 0.0f; break;
+		case GREEN:
+			red = 0.0f;
+			green = 1.0f;
+			blue = 0.0f; break;
+		case BLUE:
+			red = 0.0f;
+			green = 0.0f;
+			blue = 1.0f; break;
+		case ORANGE:
+			red = 1.0f;
+			green = 0.5f;
+			blue = 0.5f; break;
+	}
+}
+
+void createPopupMenus() {
+	shrinkMenu = glutCreateMenu(processShrinkMenu);
+
+	glutAddMenuEntry("Shrink", SHRINK);
+	glutAddMenuEntry("NORMAL", NORMAL);
+
+	fillMenu = glutCreateMenu(processFillMenu);
+
+	glutAddMenuEntry("Fill", FILL);
+	glutAddMenuEntry("Line", LINE);
+
+	colorMenu = glutCreateMenu(processColorMenu);
+	glutAddMenuEntry("Red", RED);
+	glutAddMenuEntry("Blue", BLUE);
+	glutAddMenuEntry("Green", GREEN);
+	glutAddMenuEntry("Orange", ORANGE);
+
+	mainMenu = glutCreateMenu(processMainMenu);
+
+	glutAddSubMenu("Polygon Mode", fillMenu);
+	glutAddSubMenu("Color", colorMenu);
+	glutAttachMenu(GLUT_RIGHT_BUTTON);
+
+	glutMenuStatusFunc(processMenuStatus);
+}
+
+
 
 int main(int argc, char** argv) {
 	//init
@@ -122,17 +289,26 @@ int main(int argc, char** argv) {
 	glutCreateWindow("snowman");
 
 	//callback
-	glutDisplayFunc(display);
-	glutReshapeFunc(resize);
-	glutIdleFunc(display);
+	glutDisplayFunc(renderScene);
+	glutReshapeFunc(changeSize);
+	glutIdleFunc(renderScene);
 
-	glutKeyboardFunc(keyBoardListener);
-	glutSpecialFunc(specialKeyBoardListener);
+	glutKeyboardFunc(processNormalKeys);
+	glutSpecialFunc(pressKey);
+	glutIgnoreKeyRepeat(0);
+	glutSpecialUpFunc(releaseKey);
+
+	glutMouseFunc(mouseButton);
+	glutMotionFunc(mouseMove);
 
 	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_CULL_FACE);
+
+	createPopupMenus();
 
 	//loop
 	glutMainLoop();
+
 
 	return 0;
 }
